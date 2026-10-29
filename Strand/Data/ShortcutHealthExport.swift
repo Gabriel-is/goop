@@ -2,6 +2,7 @@ import Foundation
 import WhoopStore
 import WhoopProtocol
 import StrandAnalytics
+import StrandImport
 
 /// #155 — Apple-Health-free export for sideloaded iOS installs. A free (7-day) signing identity
 /// can't carry the HealthKit entitlement, so HealthKitBridge never runs for sideloaders. Instead,
@@ -70,8 +71,68 @@ enum ShortcutHealthExport {
         guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
             return .failure("No Documents directory.")
         }
-        return await export(source: store, deviceId: repo.deviceId, now: Date(),
-                            defaults: .standard, directory: docs, timeZone: .current)
+        let outcome = await export(source: store, deviceId: repo.deviceId, now: Date(),
+                                   defaults: .standard, directory: docs, timeZone: .current)
+        // GOOP: the sleep half rides the same opt-in and the same trigger, in its own file, so the
+        // existing HR/HRV/steps file and the Shortcut that reads it are untouched. Its outcome is not
+        // folded into the return value, which keeps this function's contract as it was.
+        _ = await exportSleep(store: store, deviceId: repo.deviceId, now: Date(),
+                              defaults: .standard, directory: docs, timeZone: .current)
+        return outcome
+    }
+
+    // MARK: - GOOP: sleep (noop_sleep.txt)
+
+    /// The sleep file the companion Shortcut reads. One line per Sleep Analysis sample; format in
+    /// `ShortcutSleepExport` (StrandImport), where the selection and rendering are unit-tested.
+    static let sleepFileName = "noop_sleep.txt"
+    /// Unix seconds: sleep intervals starting before this were already exported. Advances only after a
+    /// successful write, and never past a night that may still be recording.
+    static let sleepWatermarkKey = "noop.shortcutSync.lastSleepTs"
+
+    /// Write the closed nights that are new since the watermark, built from the same merged-night plan
+    /// the HealthKit write-back uses (`HealthKitBridge.writeSleep`): computed sessions first, imported
+    /// rows overriding on a `startTs` collision, bridged with `SleepStageTotals.bridgedNightGroups`, and
+    /// a night still being recorded held back by `HealthWriteback.nightIsStillOpen`. The file is fully
+    /// replaced on every run, empty when nothing is new, because the Shortcut has no dedup.
+    @discardableResult
+    static func exportSleep(store: WhoopStore, deviceId: String, now: Date,
+                            defaults: UserDefaults, directory: URL, timeZone: TimeZone) async -> Outcome {
+        let nowTs = Int(now.timeIntervalSince1970)
+        let mark = max(defaults.integer(forKey: sleepWatermarkKey), nowTs - lookbackSeconds)
+        // Read back two extra days so a night that straddles the watermark still merges whole; the
+        // watermark, not the read window, decides what is written.
+        let fromTs = mark - 2 * 86_400
+        let url = directory.appendingPathComponent(sleepFileName)
+        do {
+            let computed = try await store.sleepSessions(deviceId: deviceId + "-noop", from: fromTs, to: nowTs, limit: 200)
+            let imported = try await store.sleepSessions(deviceId: deviceId, from: fromTs, to: nowTs, limit: 200)
+            var byStart: [Int: CachedSleepSession] = [:]
+            for s in computed { byStart[s.startTs] = s }
+            for s in imported { byStart[s.startTs] = s }
+            let sessions = byStart.keys.sorted().compactMap { byStart[$0] }
+            let newestHeartRateTs = (try? await store.hrFingerprint(deviceId: deviceId, from: nowTs - 2 * 86_400,
+                                                                    to: nowTs).maxTs) ?? 0
+            let open = Set(computed.filter {
+                HealthWriteback.nightIsStillOpen(endTs: $0.endTs, newestHeartRateTs: newestHeartRateTs, now: nowTs)
+            }.map(\.startTs))
+            let blocks = sessions.map { SleepStageTotals.NightBlock(start: $0.effectiveStartTs, end: $0.endTs) }
+            let groups = SleepStageTotals.bridgedNightGroups(blocks, offsetSec: timeZone.secondsFromGMT(for: now))
+                .map { g in
+                    g.indices.map { i -> HealthWriteback.SleepFragment in
+                        let s = sessions[i]
+                        return .init(startTs: s.startTs, effectiveStartTs: s.effectiveStartTs,
+                                     endTs: s.endTs, stagesJSON: s.stagesJSON)
+                    }
+                }
+            let plan = ShortcutSleepExport.plan(entries: HealthWriteback.mergedSleepPlan(groups: groups),
+                                                watermark: mark, openKeyStarts: open)
+            try Data(ShortcutSleepExport.render(plan.rows, timeZone: timeZone).utf8).write(to: url, options: .atomic)
+            defaults.set(plan.watermark, forKey: sleepWatermarkKey)   // only after the write landed
+            return plan.rows.isEmpty ? .nothingNew : .written(lines: plan.rows.count)
+        } catch {
+            return .failure("Shortcut sleep export failed: \(error.localizedDescription)")
+        }
     }
 
     /// Injectable core — store reads behind ShortcutExportReads, clock/defaults/destination/zone as

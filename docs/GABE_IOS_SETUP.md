@@ -161,8 +161,48 @@ Bluetooth permission back on, and re-pair there. To return, reverse the steps.
 
 | Signing | HealthKit write-back | What to do |
 |---|---|---|
-| **Free Apple ID (SideStore)** | ❌ No HealthKit entitlement. NOOP shows "This install can't connect to Apple Health directly." | Use **More → Shortcuts Export**: a toggle, **off by default**. On each app close it writes `On My iPhone › NOOP › noop_sync.txt` with one line per 15 min of `HR,HRV,Steps,time`, and a Siri Shortcut (linked from the upstream wiki) logs those lines into Health. That covers **HR, HRV and steps only, not sleep**. Health-zip *import* still works. |
+| **Free Apple ID (SideStore)** | ❌ No HealthKit entitlement. NOOP shows "This install can't connect to Apple Health directly." | Use **More → Shortcuts Export**: a toggle, **off by default**. On each app close it writes `On My iPhone › NOOP › noop_sync.txt` with one line per 15 min of `HR,HRV,Steps,time`, and a Siri Shortcut (linked from the upstream wiki) logs those lines into Health. Upstream covers **HR, HRV and steps only**; GOOP adds sleep (§5a). Health-zip *import* still works. |
 | **Paid Apple Developer ($99/yr)** | ✅ Full two-way: sleep with stages, continuous HR, nightly HRV/RHR/SpO₂/resp, workouts | Sign NOOP with the paid account (SideStore accepts paid accounts, or build in Xcode). Then use Apple Health → **Enable Apple Health** and choose types on the iOS permission sheet. The toggle you asked for is that opt-in button plus iOS's per-type switches (Settings → Health → Data Access & Devices → NOOP). |
+
+### 5a. Sleep into Apple Health without HealthKit (GOOP, branch `feat/gabe-ios-sleep-shortcut`)
+
+GOOP adds a second file to the Shortcuts export. It's written only when **More → Shortcuts Export** is
+on, and it's written at the same moment as the HR file: each time you leave the app. The file is
+`On My iPhone › NOOP › noop_sleep.txt`, with one Apple Health *Sleep Analysis* sample per line:
+
+```
+In Bed,2026-10-28 23:12:00,2026-10-29 07:05:30
+Core,2026-10-28 23:12:00,2026-10-28 23:58:30
+Deep,2026-10-28 23:58:30,2026-10-29 00:41:00
+...
+```
+
+- It contains closed nights only. A night still being recorded waits until NOOP sees you awake, or until
+  2 hours after it ends, using the same rule as the HealthKit write-back.
+- Each sample is written **exactly once**. A watermark advances after every successful write, and the
+  file is replaced on every run (it's empty when nothing is new). Run the Shortcut after each app close,
+  not on a timer. If you rebuild the Shortcut, the samples NOOP already wrote are **not** re-sent.
+- If you edit a night's times in NOOP after it was exported, the edit does **not** reach Health. The
+  HealthKit path can delete and rewrite; a Shortcut can't.
+
+**Build the Shortcut once (about 10 min, in the Shortcuts app):**
+1. **Get File** → Folder *On My iPhone › NOOP*, path `noop_sleep.txt`. Turn **Show Document Picker** off
+   and **Error If Not Found** off.
+2. **Split Text** → *File* by **New Lines**.
+3. **Repeat with Each** item in *Split Text*:
+   1. **Split Text** → *Repeat Item* by **Custom** `,`
+   2. **Get Item from List** → *First Item* (this is the value). Then *Item at Index 2* → **Get Dates
+      from Input** (start), and *Item at Index 3* → **Get Dates from Input** (end).
+   3. **If** *value* **is** `Core` → **Log Health Sample**: Type *Sleep Analysis*, Value *Core*, Start
+      *start*, End *end*. Repeat the **If** for `Deep`, `REM`, `Awake`, `In Bed` and `Asleep`. The
+      Value field on Log Health Sample is a fixed menu, so a branch per value is the reliable way to set
+      it.
+4. Go to **Automation → + → App → NOOP → Is Closed → Run Immediately**, and pick this Shortcut. You can
+   add the existing HR/HRV Shortcut to the same automation.
+
+In Health, these samples appear with **Shortcuts** as the source. *Not yet verified on a device*: the
+file logic is unit-tested on Linux and the app glue type-checks, but no iOS build has run yet. Confirm
+after one night that Health → Sleep shows the stages.
 
 ## 6. The 7-day re-sign, and free vs paid
 
