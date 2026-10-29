@@ -98,6 +98,8 @@ err.txt
 
 # Oura OAuth app credentials (BYO; never committed)
 Strand/Oura/OuraSecrets.xcconfig
+# Polar AccessLink client credentials (GOOP, BYO; never committed)
+Strand/Polar/PolarSecrets.xcconfig
 
 # Personal bundle id prefix (BYO; never committed)
 Config/BundleIdSecrets.xcconfig
