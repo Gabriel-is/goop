@@ -10,3 +10,5 @@
 // $(OURA_*) Info.plist keys resolve to empty strings. "Fully offline" is a property of the bytes
 // in the default binary, not a runtime check.
 #include? "OuraSecrets.xcconfig"
+// GOOP: the Polar Loop lane rides the same per-target config file (see Strand/Polar/PolarConfig.xcconfig).
+#include? "../Polar/PolarConfig.xcconfig"

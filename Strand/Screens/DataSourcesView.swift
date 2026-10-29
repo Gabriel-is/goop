@@ -101,6 +101,10 @@ struct DataSourcesView: View {
                 #if OURA_CLOUD_IMPORT
                 ouraCloudCard.staggeredAppear(index: 7)
                 #endif
+                #if POLAR_ACCESSLINK
+                // GOOP: Polar Loop (AccessLink) card + WHOOP/Polar primary-band choice. Strand/Polar/.
+                PolarLoopCard().staggeredAppear(index: 7)
+                #endif
                 broadcastHrCard.staggeredAppear(index: 8)
                 liveCard.staggeredAppear(index: 9)
             }

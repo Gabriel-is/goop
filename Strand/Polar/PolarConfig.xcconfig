@@ -1,0 +1,12 @@
+// Tracked wrapper for the Polar Loop (AccessLink) lane — GOOP fork. Included from
+// Strand/Oura/OuraConfig.xcconfig (the one xcconfig project.yml points every app target at), so no
+// project-level configFiles change was needed.
+//
+// PolarSecrets.xcconfig is gitignored and user-created (template: PolarSecrets.example.xcconfig). It carries:
+//   1. OTHER_SWIFT_FLAGS += -DPOLAR_ACCESSLINK, which compiles Strand/Polar/*.swift and the Data Sources
+//      "Polar Loop" card into the binary (a separate setting from Oura's SWIFT_ACTIVE_COMPILATION_CONDITIONS
+//      on purpose: two xcconfigs both assigning that one setting would clobber each other);
+//   2. the POLAR_* OAuth client values. Leave them blank and the card still builds in FIXTURE mode
+//      ("Preview with sample data"), credential-free.
+// Without the file, nothing Polar is compiled and the $(POLAR_*) Info.plist keys resolve to "".
+#include? "PolarSecrets.xcconfig"

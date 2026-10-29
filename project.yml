@@ -66,6 +66,10 @@ packages:
   # record. The live PMD data path is not wired yet — this is identification/diagnostics only.
   PolarProtocol:
     path: Packages/PolarProtocol
+  # GOOP: pure, network-free Polar AccessLink parser / mapper / pipeline for the Polar Loop lane
+  # (Strand/Polar/, compiled only with -DPOLAR_ACCESSLINK). See docs/polar-loop-data-sources.md.
+  PolarAccessLink:
+    path: Packages/PolarAccessLink
   # Compresses the full-database `.noopbak` backup (single-entry deflate ZIP) in DataBackup.swift.
   # Already resolved transitively via StrandImport; linked directly so the app target can
   # `import ZIPFoundation`. Same exact version as StrandImport's, so SPM resolves one copy.
@@ -120,6 +124,11 @@ targets:
         OURA_CLIENT_ID: $(OURA_CLIENT_ID)
         OURA_CLIENT_SECRET: $(OURA_CLIENT_SECRET)
         OURA_REDIRECT_URI: $(OURA_REDIRECT_URI)
+        # GOOP: Polar AccessLink client (Strand/Polar/PolarSecrets.xcconfig); blank = sample-data mode.
+        # The noop:// scheme below also carries noop://polar/callback.
+        POLAR_CLIENT_ID: $(POLAR_CLIENT_ID)
+        POLAR_CLIENT_SECRET: $(POLAR_CLIENT_SECRET)
+        POLAR_REDIRECT_URI: $(POLAR_REDIRECT_URI)
         # Registers the noop:// URL scheme so ASWebAuthenticationSession's OAuth redirect
         # (noop://oura/callback) reaches OuraOAuthProvider instead of bouncing off the OS.
         CFBundleURLTypes:
@@ -158,6 +167,7 @@ targets:
       - package: ZIPFoundation
       - package: OuraProtocol
       - package: PolarProtocol
+      - package: PolarAccessLink
   StrandTests:
     type: bundle.unit-test
     platform: macOS
@@ -326,6 +336,11 @@ targets:
         OURA_CLIENT_ID: $(OURA_CLIENT_ID)
         OURA_CLIENT_SECRET: $(OURA_CLIENT_SECRET)
         OURA_REDIRECT_URI: $(OURA_REDIRECT_URI)
+        # GOOP: Polar AccessLink client (Strand/Polar/PolarSecrets.xcconfig); blank = sample-data mode.
+        # The noop:// scheme below also carries noop://polar/callback.
+        POLAR_CLIENT_ID: $(POLAR_CLIENT_ID)
+        POLAR_CLIENT_SECRET: $(POLAR_CLIENT_SECRET)
+        POLAR_REDIRECT_URI: $(POLAR_REDIRECT_URI)
         # Registers the noop:// URL scheme so ASWebAuthenticationSession's OAuth redirect
         # (noop://oura/callback) reaches OuraOAuthProvider instead of bouncing off the OS.
         CFBundleURLTypes:
@@ -363,6 +378,7 @@ targets:
       - package: MarkdownUI
       - package: ZIPFoundation
       - package: PolarProtocol
+      - package: PolarAccessLink
       - target: NOOPiOSWidgets
       # Embed the watchOS app so the iPhone app carries it (NOOP.app/Watch/NOOPWatch.app). A watch app
       # installs by riding inside its iOS companion; without this it would never reach a paired watch.

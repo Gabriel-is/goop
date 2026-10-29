@@ -50,6 +50,7 @@ jobs:
           - WhoopProtocol
           - OuraProtocol
           - PolarProtocol
+          - PolarAccessLink
           - WhoopStore
           - StrandAnalytics
           - StrandImport
