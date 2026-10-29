@@ -103,8 +103,17 @@ choice to keep sideload signing apart from your main account. The sign-in is cas
    such as the stale-battery warning, use them.
 
 > **Using the GOOP fix before upstream ships it:** the background-task fix in this PR is not in upstream's
-> `.ipa`. Until upstream merges an equivalent, you need a GOOP-built `.ipa` to get it, and building one
-> needs macOS (CI or a Mac; see §7). Everything else works on the upstream `.ipa`.
+> `.ipa`. Everything else works on the upstream `.ipa`, so install that first. To get a GOOP-built `.ipa`
+> without a Mac:
+> 1. On github.com/Gabriel-is/goop → **Actions**, click **"I understand my workflows, go ahead and enable
+>    them"**. GitHub disables workflows on forks by default. **Before you click:** this also activates
+>    `prune-stale-branches.yml`, which deletes merged or closed PR branches weekly. Disable that one
+>    workflow afterwards if you don't want it.
+> 2. Actions → **fork-testing-build** → *Run workflow*, with the branch set to `feat/gabe-ios` (or `main`
+>    after merge). It runs on GitHub's macOS runners, which are free for public repos, and attaches
+>    `NOOP-ios-unsigned-v<ver>.ipa` to a `testing-latest` pre-release on **your fork**.
+> 3. Download that `.ipa` on the iPhone and open it with SideStore. It keeps the production bundle id,
+>    so it **upgrades the upstream install in place with your data intact**. Make a backup first anyway.
 
 **Free-account quotas:** a free Apple ID can have **3 sideloaded apps active** (SideStore counts as one)
 and register **10 App IDs per rolling 7 days**. NOOP uses two (the app plus the widget extension). Don't
