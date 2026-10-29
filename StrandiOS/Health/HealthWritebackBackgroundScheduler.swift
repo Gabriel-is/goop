@@ -9,7 +9,7 @@ import Foundation
 /// guarantee an exact cadence, so the one-hour date is deliberately only an earliest-begin request.
 @MainActor
 enum HealthWritebackBackgroundScheduler {
-    static let taskIdentifier = (Bundle.main.bundleIdentifier ?? "com.noopapp.noop") + ".healthwriteback"
+    static let taskIdentifier = BackgroundTaskID.identifier(suffix: "healthwriteback")
 
     /// Register at launch, before the first scene finishes connecting. The operation returns whether
     /// the HealthKit write completed; authorization absence is a successful no-op and cancels the next

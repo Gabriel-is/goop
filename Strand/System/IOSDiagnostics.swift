@@ -147,7 +147,19 @@ struct IOSDiagnostics {
         if let lpm = isLowPowerMode { lines.append("Low Power Mode: \(lpm ? "ON (throttles background BLE)" : "off")") }
         if let side = isSideloaded { lines.append("Sideloaded build: \(side ? "yes" : "no (App Store / TestFlight)")") }
         // #2553: silent unless it is actually broken, so an ordinary install's export is unchanged.
-        if let broken = Self.backgroundTaskIdentityFault() { lines.append(broken) }
+        // GOOP: a re-signer's rewritten bundle id is now repaired by `BackgroundTaskID` (it registers the
+        // plist's own identifiers), so the mismatch is reported as repaired rather than inert when every
+        // known identifier still resolves to a permitted one.
+        if let broken = Self.backgroundTaskIdentityFault() {
+            let permitted = Bundle.main.infoDictionary?["BGTaskSchedulerPermittedIdentifiers"] as? [String] ?? []
+            if BackgroundTaskID.allPermitted(suffixes: BackgroundTaskID.knownSuffixes,
+                                             runtimeID: Bundle.main.bundleIdentifier, permitted: permitted) {
+                lines.append("Background tasks: bundle id rewritten by the signer (runs as "
+                    + "\(Bundle.main.bundleIdentifier ?? "?")); registering the Info.plist identifiers as-is")
+            } else {
+                lines.append(broken)
+            }
+        }
         if let days = expiryDaysRemaining() {
             if days < 0 {
                 lines.append("Sideload expiry: EXPIRED \(-days) day\(abs(days) == 1 ? "" : "s") ago - re-sign to relaunch")
