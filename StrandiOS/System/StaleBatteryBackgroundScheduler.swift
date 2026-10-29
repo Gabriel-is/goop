@@ -20,7 +20,7 @@ import Foundation
 /// foreground check covers it.
 @MainActor
 enum StaleBatteryBackgroundScheduler {
-    static let taskIdentifier = (Bundle.main.bundleIdentifier ?? "com.noopapp.noop") + ".stalebattery"
+    static let taskIdentifier = BackgroundTaskID.identifier(suffix: "stalebattery")
 
     /// Roughly how often to ask. `BGAppRefreshTaskRequest` is an EARLIEST-begin request, never a promise,
     /// so the real cadence is the system's to choose. Half an hour matches the Android worker's period;

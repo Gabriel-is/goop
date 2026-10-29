@@ -286,7 +286,7 @@ enum RescoreBackgroundScheduler {
     // MARK: - iOS background-processing plumbing
 
     #if os(iOS)
-    static let taskIdentifier = (Bundle.main.bundleIdentifier ?? "com.noopapp.noop") + ".rescore"
+    static let taskIdentifier = BackgroundTaskID.identifier(suffix: "rescore")
 
     /// Register the handler. MUST be called from `StrandiOSApp.init()` before launch finishes, and the
     /// identifier MUST be listed in `BGTaskSchedulerPermittedIdentifiers`, or iOS never delivers the task.
