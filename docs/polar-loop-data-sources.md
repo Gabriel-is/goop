@@ -30,8 +30,8 @@ Every claim below links to its source. **[unverified]** marks anything I could n
 
 **The cost of (a):**
 1. It is a **cloud** dependency, and upstream NOOP's [`AGENTS.md`](../AGENTS.md) scope bars that by default.
-   GOOP handles it the way upstream handled Oura:
-   - It is compiled out unless an untracked xcconfig opts in.
+   GOOP handles it much as upstream handled Oura:
+   - It is compiled in only by a one-line switch in `Strand/Polar/PolarConfig.xcconfig`, which is on by default in this fork.
    - It is user-initiated and inbound only.
    - Tokens live in the Keychain.
    - There is no GOOP server.
@@ -78,9 +78,12 @@ inside an iOS binary can be extracted by anyone who has the binary. The options:
 
 | Option | Security | Fits NOOP/GOOP scope? |
 |---|---|---|
-| **1. BYO client, secret in an untracked xcconfig, single-user build** (what upstream does for Oura) | The secret is only in Gabe's own sideloaded binary. Anyone holding that binary could pull Gabe's Polar *client* secret, but they would still need a user's OAuth grant to read data. Rotate it in the admin portal if the phone or IPA leaks. | Yes. **Chosen.** |
+| 1. BYO client, secret baked in by an untracked xcconfig (what upstream does for Oura) | Fine for a **local** Xcode build. **Not safe for GOOP's real install path.** Gabe's `.ipa` comes from the fork's GitHub Actions *Testing build*, and `Gabriel-is/goop` is **public**, so anything in that build's Info.plist is published. | Kept for local builds only (`Strand/Polar/PolarSecrets.example.xcconfig`). |
 | 2. Small token-exchange proxy (a serverless function holds the secret) | Best practice for multi-user apps. | No. Upstream forbids a NOOP-operated server, and it is overkill for one user. |
-| 3. Paste the secret at runtime and store it in the Keychain | Same exposure as 1, but avoids rebuilding. | Possible later. Not built. |
+| **3. BYO client typed into the app and stored in the Keychain** (`PolarCredentialStore`, ThisDeviceOnly) | The secret never touches git or CI and lives only on Gabe's phone. Anyone with the unlocked phone could extract it; rotate it in the admin portal if needed. | **Chosen** for CI-built installs. |
+
+A Polar *client* secret on its own reads no data. It still needs a user's OAuth grant, and the access token is also
+kept only in the Keychain.
 
 ### Endpoints GOOP reads
 
@@ -187,7 +190,7 @@ already has it).
 | Pure AccessLink models, parser, hypnogram, mapper, sync pipeline (over a `PolarAccessLinkTransport` protocol), fixture transport, recovery mapping | `Packages/PolarAccessLink` (new) | **No.** The package is network-free, like every NOOP package. |
 | Realistic fixture JSON (14 nights, AccessLink shapes) | `Packages/PolarAccessLink/Sources/PolarAccessLink/Fixtures/` | — |
 | `polar-accesslink-demo` CLI: runs the fixture pipeline end to end and prints nights and Charge | `Packages/PolarAccessLink/Sources/polar-accesslink-demo` | No |
-| OAuth (ASWebAuthenticationSession + paste-URL fallback), Keychain token store, URLSession transport, store writer, connect model, Data Sources card with the WHOOP/Polar choice | `Strand/Polar/` (app target, gated by `POLAR_ACCESSLINK`) | Yes (app target only) |
+| OAuth (ASWebAuthenticationSession + paste-URL fallback), Keychain token and client stores, URLSession transport, store writer, connect model, Data Sources card with the WHOOP/Polar choice and in-app client entry | `Strand/Polar/` (app target; `-DPOLAR_ACCESSLINK` is on by default in GOOP via the tracked `PolarConfig.xcconfig`, and no request is made without a tap or the Polar-primary choice) | Yes (app target only) |
 | One-line registrations | `Strand/Screens/DataSourcesView.swift` (card), `Strand/Data/Repository.swift` (`"polar-api"` in `wearableImportSources`, so the existing import fold computes Charge), `project.yml`, `.gitignore`, `Strand/Oura/OuraConfig.xcconfig` (optional include) | — |
 
 Data lands under `deviceId = "polar-api"`, registered as `.cloudImport`. The import-source priority in

@@ -1,12 +1,23 @@
-// Tracked wrapper for the Polar Loop (AccessLink) lane — GOOP fork. Included from
-// Strand/Oura/OuraConfig.xcconfig (the one xcconfig project.yml points every app target at), so no
-// project-level configFiles change was needed.
+// Tracked wrapper for the Polar Loop (AccessLink) lane, GOOP fork. It is included from
+// Strand/Oura/OuraConfig.xcconfig, which is the one xcconfig project.yml points every app target at,
+// so no project-level configFiles change was needed.
 //
-// PolarSecrets.xcconfig is gitignored and user-created (template: PolarSecrets.example.xcconfig). It carries:
-//   1. OTHER_SWIFT_FLAGS += -DPOLAR_ACCESSLINK, which compiles Strand/Polar/*.swift and the Data Sources
-//      "Polar Loop" card into the binary (a separate setting from Oura's SWIFT_ACTIVE_COMPILATION_CONDITIONS
-//      on purpose: two xcconfigs both assigning that one setting would clobber each other);
-//   2. the POLAR_* OAuth client values. Leave them blank and the card still builds in FIXTURE mode
-//      ("Preview with sample data"), credential-free.
-// Without the file, nothing Polar is compiled and the $(POLAR_*) Info.plist keys resolve to "".
+// GOOP DEFAULT: the lane is compiled IN. Gabe's iPhone builds come from the fork's GitHub Actions
+// "Testing build", which has no local files, so the compile switch has to live in a tracked file.
+// Compiling the lane in does NOT add any background network activity:
+//   - nothing contacts Polar until you tap Connect or Sync now, or pick "Polar Loop" as your primary band;
+//   - the card's "Preview with sample data" never touches the network.
+// To build a fully offline binary, delete the next line. That restores upstream's byte-level offline
+// default for this lane.
+//
+// This uses OTHER_SWIFT_FLAGS, not SWIFT_ACTIVE_COMPILATION_CONDITIONS, on purpose. Oura's
+// OuraSecrets.xcconfig assigns SWIFT_ACTIVE_COMPILATION_CONDITIONS, and two xcconfigs assigning
+// the same setting clobber each other.
+OTHER_SWIFT_FLAGS = $(inherited) -DPOLAR_ACCESSLINK
+
+// Optional, local Xcode builds only: PolarSecrets.xcconfig (gitignored, template
+// PolarSecrets.example.xcconfig) can bake your AccessLink client into the build.
+// NEVER do this for a CI build. The fork's releases are public, and an .ipa's Info.plist is readable by
+// anyone who downloads it. For CI-built installs, type the client into the Polar Loop card instead; it
+// is stored in the Keychain.
 #include? "PolarSecrets.xcconfig"

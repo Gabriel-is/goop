@@ -1,4 +1,5 @@
-// GOOP: Polar Loop lane. Compiled ONLY with -DPOLAR_ACCESSLINK (see PolarConfig.xcconfig).
+// GOOP: Polar Loop lane. Compiled only with -DPOLAR_ACCESSLINK (on by default in GOOP via the tracked
+// Strand/Polar/PolarConfig.xcconfig; delete that line there for a fully offline build).
 // The ONE place the Polar lane touches the network for data. The pure pipeline in Packages/PolarAccessLink
 // only sees this through `PolarAccessLinkTransport`.
 #if POLAR_ACCESSLINK

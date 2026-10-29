@@ -1,4 +1,5 @@
-// GOOP: Polar Loop lane. Compiled ONLY with -DPOLAR_ACCESSLINK (see PolarConfig.xcconfig).
+// GOOP: Polar Loop lane. Compiled only with -DPOLAR_ACCESSLINK (on by default in GOOP via the tracked
+// Strand/Polar/PolarConfig.xcconfig; delete that line there for a fully offline build).
 #if POLAR_ACCESSLINK
 import Foundation
 import Combine
@@ -58,10 +59,31 @@ final class PolarConnectModel: ObservableObject {
     private var webContext: PolarWebAuthContext?
     private static let lastSyncKey = "goop.polar.lastSync"
     private static let memberIdKey = "goop.polar.memberId"
+    private static let registeredKey = "goop.polar.registered"
     static let autoSyncInterval: TimeInterval = 30 * 60
 
-    var credentials: PolarCredentials? { PolarCredentials.fromBundle }
-    var isConfigured: Bool { credentials != nil }
+    var credentials: PolarCredentials? { PolarCredentials.resolved }
+    @Published private(set) var isConfigured = PolarCredentials.resolved != nil
+    /// True when the client came from the card (so it can be edited/forgotten there); false for xcconfig.
+    var credentialsFromKeychain: Bool { PolarCredentials.fromBundle == nil && isConfigured }
+
+    /// Save a client typed into the card. Values are trimmed; nothing is sent anywhere until Connect.
+    func saveCredentials(clientId: String, clientSecret: String, redirectURI: String) {
+        let t = { (s: String) in s.trimmingCharacters(in: .whitespacesAndNewlines) }
+        let redirect = t(redirectURI).isEmpty ? PolarCredentials.defaultRedirectURI : t(redirectURI)
+        guard !t(clientId).isEmpty, !t(clientSecret).isEmpty, URL(string: redirect)?.scheme != nil else {
+            statusText = "Enter the client ID and secret from admin.polaraccesslink.com."; return
+        }
+        let ok = PolarCredentialStore.save(PolarCredentials(clientId: t(clientId), clientSecret: t(clientSecret), redirectURI: redirect))
+        isConfigured = PolarCredentials.resolved != nil
+        statusText = ok ? "Polar client saved to the Keychain. Tap Connect Polar." : "Couldn't save to the Keychain."
+    }
+
+    func forgetCredentials() {
+        PolarCredentialStore.clear()
+        isConfigured = PolarCredentials.resolved != nil
+        statusText = "Polar client removed from this device."
+    }
     var lastSync: Date? {
         let t = UserDefaults.standard.double(forKey: Self.lastSyncKey)
         return t > 0 ? Date(timeIntervalSince1970: t) : nil
@@ -111,9 +133,11 @@ final class PolarConnectModel: ObservableObject {
         pendingState = nil                                   // a code is single-use; never retry it
         statusText = "Finishing sign-in…"
         let tokens = try await exchange(PolarOAuth.tokenRequest(creds, code: code))
-        try await register(token: tokens.accessToken)
+        // Store the token BEFORE registering: if registration fails on missing consents (403), the grant is
+        // kept, and the next Connect/Sync after accepting consents doesn't need a fresh sign-in.
         guard PolarTokenStore.save(tokens) else { throw PolarError.tokenExchangeFailed("keychain write failed") }
         isConnected = true
+        try await register(token: tokens.accessToken)
         await syncNow(repo: repo)
     }
 
@@ -137,7 +161,7 @@ final class PolarConnectModel: ObservableObject {
         do { (_, resp) = try await URLSession.shared.data(for: PolarOAuth.registerUserRequest(token: token, memberId: memberId)) }
         catch { throw PolarError.network(error.localizedDescription) }
         switch (resp as? HTTPURLResponse)?.statusCode ?? 0 {
-        case 200..<300, 409: return
+        case 200..<300, 409: UserDefaults.standard.set(true, forKey: Self.registeredKey); return
         case 403: throw PolarError.consentsMissing
         case let s: throw PolarError.registrationFailed("HTTP \(s)")
         }
@@ -167,6 +191,8 @@ final class PolarConnectModel: ObservableObject {
         busy = true; statusText = "Syncing Polar…"
         defer { busy = false }
         do {
+            // A grant stored while consents were missing is registered on the next sync (POST /v3/users).
+            if !UserDefaults.standard.bool(forKey: Self.registeredKey) { try await register(token: tokens.accessToken) }
             let pipeline = PolarSyncPipeline(transport: PolarHTTPTransport(token: tokens.accessToken), timeZone: .current)
             let result = try await pipeline.run(today: Self.localDay(Date()))
             guard let store = await repo.storeHandle() else { statusText = "No local store."; return }
@@ -218,6 +244,7 @@ final class PolarConnectModel: ObservableObject {
             }
             PolarTokenStore.clear()
             UserDefaults.standard.removeObject(forKey: Self.lastSyncKey)
+            UserDefaults.standard.removeObject(forKey: Self.registeredKey)
             if let store = await repo.storeHandle() {
                 do {
                     try await store.deleteAllData(deviceId: PolarSyncWriter.deviceId)

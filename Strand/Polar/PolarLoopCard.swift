@@ -1,4 +1,5 @@
-// GOOP: Polar Loop lane. Compiled ONLY with -DPOLAR_ACCESSLINK (see PolarConfig.xcconfig).
+// GOOP: Polar Loop lane. Compiled only with -DPOLAR_ACCESSLINK (on by default in GOOP via the tracked
+// Strand/Polar/PolarConfig.xcconfig; delete that line there for a fully offline build).
 #if POLAR_ACCESSLINK
 import SwiftUI
 import StrandDesign
@@ -14,6 +15,9 @@ struct PolarLoopCard: View {
     @AppStorage(PrimaryBand.defaultsKey) private var primaryBandRaw = PrimaryBand.whoop.rawValue
     @State private var pasted = ""
     @State private var confirmDisconnect = false
+    @State private var clientId = ""
+    @State private var clientSecret = ""
+    @State private var redirect = PolarCredentials.defaultRedirectURI
 
     private var tint: Color { StrandPalette.accent }
 
@@ -87,11 +91,38 @@ struct PolarLoopCard: View {
                 }
                 .disabled(model.busy)
             }
+            if !model.isConfigured { credentialForm }
+            if model.credentialsFromKeychain {
+                Button { model.forgetCredentials() } label: { Text(verbatim: PolarCopy.forgetClient) }
+                    .font(.caption).disabled(model.busy)
+            }
             if !model.isConfigured {
                 Text(verbatim: PolarCopy.setupHint)
                     .font(.caption).foregroundStyle(StrandPalette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+
+    /// Enter the AccessLink client on-device (Keychain). This is the path for CI-built .ipa installs, whose
+    /// Info.plist must never carry a secret (the fork's releases are public).
+    private var credentialForm: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            TextField(text: $clientId) { Text(verbatim: PolarCopy.clientIdPrompt) }
+                .textFieldStyle(.roundedBorder)
+            SecureField(text: $clientSecret) { Text(verbatim: PolarCopy.clientSecretPrompt) }
+                .textFieldStyle(.roundedBorder)
+            TextField(text: $redirect) { Text(verbatim: PolarCopy.redirectPrompt) }
+                .textFieldStyle(.roundedBorder)
+                #if os(iOS)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                #endif
+            Button {
+                model.saveCredentials(clientId: clientId, clientSecret: clientSecret, redirectURI: redirect)
+                clientSecret = ""
+            } label: { Text(verbatim: PolarCopy.saveClient) }
+            .disabled(clientId.isEmpty || clientSecret.isEmpty)
         }
     }
 
@@ -139,7 +170,7 @@ enum PolarCopy {
     static let disconnect = "Disconnect"
     static let connect = "Connect Polar"
     static let preview = "Preview with sample data"
-    static let setupHint = "To connect your own Loop, add your Polar AccessLink client to Strand/Polar/PolarSecrets.xcconfig (see docs/polar-loop-morning-checklist.md). The preview uses synthetic sample data and saves nothing."
+    static let setupHint = "To connect your own Loop, enter the client ID and secret from admin.polaraccesslink.com above (stored in this device's Keychain), or add them to Strand/Polar/PolarSecrets.xcconfig for a local Xcode build. See docs/polar-loop-morning-checklist.md. The preview uses synthetic sample data and saves nothing."
     static let pastePrompt = "Paste the address here (…?code=…&state=…)"
     static let finishConnecting = "Finish connecting"
     static let previewHeader = "Sample nights: NOOP Charge vs Polar ANS charge"
@@ -149,6 +180,11 @@ enum PolarCopy {
     static let working = "Working…"
     static let syncNow = "Sync now"
     static let noHRV = "HRV –"
+    static let clientIdPrompt = "Polar client ID"
+    static let clientSecretPrompt = "Polar client secret"
+    static let redirectPrompt = "Redirect URL (as registered)"
+    static let saveClient = "Save Polar client"
+    static let forgetClient = "Forget Polar client"
     static func lastSynced(_ when: String) -> String {
         "Last synced " + when + ". Polar keeps about 28 days, so sync at least every few weeks."
     }

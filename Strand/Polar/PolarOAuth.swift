@@ -1,11 +1,12 @@
-// GOOP: Polar Loop lane. Compiled ONLY with -DPOLAR_ACCESSLINK (set by the untracked
-// Strand/Polar/PolarSecrets.xcconfig — see PolarConfig.xcconfig). A default build contains none of it.
+// GOOP: Polar Loop lane. Compiled only with -DPOLAR_ACCESSLINK (on by default in GOOP via the tracked
+// Strand/Polar/PolarConfig.xcconfig; delete that line there for a fully offline build).
 #if POLAR_ACCESSLINK
 import Foundation
 
-/// The user's own AccessLink client, injected at build time (untracked xcconfig → Info.plist).
+/// The user's own AccessLink client: typed into the card (Keychain), or baked in by a LOCAL build's untracked
+/// PolarSecrets.xcconfig (→ Info.plist). Never a CI input: the fork's release builds are public.
 /// nil credentials = fixture mode only (the card still offers "Preview with sample data").
-struct PolarCredentials: Equatable {
+struct PolarCredentials: Equatable, Codable {
     let clientId: String
     let clientSecret: String
     let redirectURI: String
@@ -22,6 +23,14 @@ struct PolarCredentials: Equatable {
     }
 
     static var fromBundle: PolarCredentials? { from(Bundle.main.infoDictionary ?? [:]) }
+
+    /// What the lane actually uses: build-time values (a local Xcode build with PolarSecrets.xcconfig) win,
+    /// else the client the user typed into the card (Keychain). The typed path exists because GOOP's iOS
+    /// builds come from the PUBLIC fork's GitHub Actions release: anything baked into that .ipa's
+    /// Info.plist is published to the world, so a client secret must never be a CI build input.
+    static var resolved: PolarCredentials? { fromBundle ?? PolarCredentialStore.load() }
+
+    static let defaultRedirectURI = "noop://polar/callback"
 
     /// A custom-scheme redirect (noop://…) can be caught by ASWebAuthenticationSession. An http(s) one
     /// (e.g. http://localhost/…) cannot on iOS without associated domains, so the flow falls back to
@@ -47,7 +56,7 @@ enum PolarError: LocalizedError, Equatable {
          registrationFailed(String), consentsMissing, network(String)
     var errorDescription: String? {
         switch self {
-        case .notConfigured: return "Add your Polar AccessLink client to PolarSecrets.xcconfig to connect. Sample-data preview still works."
+        case .notConfigured: return "Enter your Polar AccessLink client in the card to connect. Sample-data preview still works."
         case .notConnected: return "Not connected to Polar."
         case .authFailed(let m): return "Polar sign-in didn't complete (\(m))."
         case .tokenExchangeFailed(let m): return "Polar sign-in failed at the token step (\(m))."
