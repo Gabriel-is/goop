@@ -363,6 +363,11 @@ struct StrandiOSApp: App {
                 // timer or an incidental reconnect. Floored at 90s and never clock/empty-streak-suppressed
                 // (BackfillPolicy.shouldRun's .foreground case), so this is a safe no-op on rapid re-opens.
                 model.ble.requestSync(.foreground)
+                #if POLAR_ACCESSLINK
+                // GOOP: when Polar Loop is the primary band, pull AccessLink on open (30-minute floor
+                // inside syncIfStale), so Today doesn't wait for Data Sources to be visited.
+                PolarAutoSync.appBecameActive(repo: model.repo)
+                #endif
                 // #1538: settle a re-score an earlier background attempt could not finish, rather than
                 // waiting on the 15-minute idle tick now that there is a foreground with no suspension
                 // deadline. A no-op unless one is genuinely outstanding.
